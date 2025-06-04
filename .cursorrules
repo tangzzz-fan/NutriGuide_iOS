@@ -1,0 +1,488 @@
+# NutriGuide iOS 项目开发规则
+
+## 项目概述
+NutriGuide是一款基于AI的个性化健康膳食管理iOS应用，使用SwiftUI + Combine + Moya + MVVMC架构，遵循Clean Architecture、SOLID原则和面向协议编程(POP)。
+
+## 技术栈
+- **UI框架**: SwiftUI (iOS 14.0+)
+- **响应式编程**: Combine
+- **网络层**: Moya + Alamofire  
+- **架构**: MVVMC (Model-View-ViewModel-Coordinator) + Clean Architecture + POP
+- **模型编解码**: Codable
+- **测试**: XCTest
+- **依赖管理**: Swift Package Manager
+- **依赖注入**: Swinject
+- **数据安全**: Keychain + CoreData + 传输加密
+
+## 项目结构规范
+
+### 目录结构
+```
+NutriGuide/
+├── Application/           # 应用启动和配置
+├── Presentation/          # 表现层
+│   ├── Coordinators/      # 导航协调器
+│   ├── Views/            # SwiftUI视图
+│   ├── ViewModels/       # 视图模型
+│   └── Components/       # 可复用组件
+├── Domain/               # 业务领域层
+│   ├── Entities/         # 领域实体
+│   ├── UseCases/         # 用例
+│   ├── Repositories/     # 仓储协议
+│   └── Protocols/        # 协议定义
+├── Data/                 # 数据层
+│   ├── Network/          # 网络相关
+│   ├── Repositories/     # 仓储实现
+│   └── Local/           # 本地存储
+├── Infrastructure/       # 基础设施
+│   ├── DI/              # 依赖注入 (Swinject)
+│   ├── Configuration/   # 环境配置
+│   ├── Security/        # 安全相关
+│   ├── Storage/         # 存储管理
+│   ├── Extensions/      # 扩展
+│   ├── Utils/           # 工具类
+│   └── Constants/       # 常量
+└── Resources/           # 资源文件
+```
+
+## 代码编写规范
+
+### 1. 命名约定
+- **文件名**: PascalCase (如 `HomeViewModel.swift`)
+- **类/结构体**: PascalCase (如 `UserProfile`)
+- **变量/函数**: camelCase (如 `userName`, `loadUserData()`)
+- **常量**: camelCase (如 `maxRetryCount`)
+- **协议**: PascalCase + Protocol后缀 (如 `UserRepositoryProtocol`)
+- **枚举**: PascalCase，case使用camelCase
+
+### 2. 文件创建规则
+- **Views**: 放在 `Presentation/Views/` 对应功能模块目录下
+- **ViewModels**: 放在 `Presentation/ViewModels/` 对应功能模块目录下
+- **Entities**: 放在 `Domain/Entities/` 目录下
+- **Protocols**: 放在 `Domain/Protocols/` 目录下
+- **UseCases**: 放在 `Domain/UseCases/` 对应功能模块目录下
+- **Network Models**: 放在 `Data/Network/Models/` 目录下
+- **Repositories**: 协议放在 `Domain/Repositories/`，实现放在 `Data/Repositories/`
+- **Configuration**: 放在 `Infrastructure/Configuration/` 目录下
+- **Security**: 放在 `Infrastructure/Security/` 目录下
+- **Storage**: 放在 `Infrastructure/Storage/` 目录下
+
+### 3. 架构层级规则
+- **Presentation层**: 只能依赖Domain层
+- **Domain层**: 不依赖任何其他层，定义所有业务协议
+- **Data层**: 只能依赖Domain层
+- **Infrastructure层**: 为各层提供基础支撑
+
+### 4. 面向协议编程(POP)规范
+```swift
+// ✅ 协议优先设计
+protocol DataLoadable {
+    associatedtype DataType
+    func loadData() async throws -> DataType
+}
+
+protocol Cacheable {
+    associatedtype CacheKey: Hashable
+    var cacheKey: CacheKey { get }
+    var cacheExpiration: TimeInterval { get }
+}
+
+// ✅ 协议组合
+protocol ViewModelProtocol: ObservableObject, DataLoadable, Refreshable {
+    var isLoading: Bool { get set }
+    var errorMessage: String { get set }
+}
+
+// ✅ 协议扩展提供默认实现
+extension Cacheable {
+    var cacheExpiration: TimeInterval { 300 } // 默认5分钟
+}
+```
+
+### 5. SwiftUI代码规范
+```swift
+// ✅ 正确的SwiftUI View结构
+struct HomeView: View {
+    @StateObject private var viewModel: HomeViewModel
+    
+    init() {
+        _viewModel = StateObject(wrappedValue: DIContainer.shared.resolve(HomeViewModel.self))
+    }
+    
+    var body: some View {
+        NavigationView {
+            content
+        }
+        .onAppear {
+            viewModel.loadData()
+        }
+    }
+    
+    private var content: some View {
+        // 视图内容
+    }
+}
+```
+
+### 6. ViewModel代码规范
+```swift
+// ✅ 正确的ViewModel结构
+@MainActor
+class HomeViewModel: ViewModelProtocol {
+    // MARK: - Published Properties
+    @Published var isLoading = false
+    @Published var errorMessage = ""
+    @Published var isRefreshing = false
+    
+    // MARK: - Dependencies
+    private let useCase: UseCaseProtocol
+    private var cancellables = Set<AnyCancellable>()
+    
+    init(useCase: UseCaseProtocol) {
+        self.useCase = useCase
+    }
+    
+    // MARK: - DataLoadable
+    func loadData() async throws -> DataType {
+        // 实现数据加载
+    }
+    
+    // MARK: - Refreshable
+    func refresh() async {
+        isRefreshing = true
+        defer { isRefreshing = false }
+        do {
+            _ = try await loadData()
+        } catch {
+            handleError(error)
+        }
+    }
+    
+    // MARK: - Private Methods
+    private func handleError(_ error: Error) {
+        errorMessage = ErrorHandler.handle(error)
+    }
+}
+```
+
+### 7. 多环境配置规范
+```swift
+// ✅ 环境配置使用
+enum Environment: String, CaseIterable {
+    case development = "dev"
+    case qa = "qa"
+    case production = "prod"
+}
+
+// ✅ 配置管理器
+class ConfigurationManager: ConfigurationManagerProtocol {
+    static let shared = ConfigurationManager()
+    private(set) var currentEnvironment: Environment
+    
+    var baseURL: String {
+        currentEnvironment.baseURL
+    }
+}
+
+// ✅ API端点使用配置
+extension NutriGuideAPI: TargetType {
+    var baseURL: URL {
+        let urlString = ConfigurationManager.shared.baseURL
+        return URL(string: urlString)!
+    }
+}
+```
+
+### 8. 依赖注入规范(Swinject)
+```swift
+// ✅ 使用Swinject进行依赖注入
+class DIContainer {
+    static let shared = DIContainer()
+    private let container = Container()
+    
+    private func registerDependencies() {
+        // 注册配置管理器
+        container.register(ConfigurationManagerProtocol.self) { _ in
+            ConfigurationManager.shared
+        }.inObjectScope(.container)
+        
+        // 注册网络服务
+        container.register(APIServiceProtocol.self) { resolver in
+            SecureAPIService(
+                configuration: resolver.resolve(ConfigurationManagerProtocol.self)!,
+                encryptionService: resolver.resolve(EncryptionServiceProtocol.self)!
+            )
+        }.inObjectScope(.container)
+    }
+}
+
+// ✅ 依赖解析
+func resolve<T>(_ type: T.Type) -> T {
+    return DIContainer.shared.resolve(type)
+}
+```
+
+### 9. 数据安全规范
+```swift
+// ✅ 敏感数据分类存储
+protocol SecureStorable {
+    var storageType: StorageType { get }
+}
+
+enum StorageType {
+    case keychain        // 最高安全级别
+    case encryptedLocal  // 加密本地存储
+    case local          // 普通本地存储
+    case memory         // 仅内存存储
+}
+
+// ✅ 高敏感数据使用Keychain
+struct HealthProfile: Codable, SecureStorable {
+    let height: Double
+    let weight: Double
+    let medicalConditions: [String]
+    
+    var storageType: StorageType { .keychain }
+}
+
+// ✅ 传输加密
+class SecureAPIService: APIServiceProtocol {
+    private let encryptionService: EncryptionServiceProtocol
+    
+    func request<T: Codable>(_ target: NutriGuideAPI, responseType: T.Type) -> AnyPublisher<T, Error> {
+        // 自动加密/解密敏感数据
+    }
+}
+```
+
+### 10. 网络请求规范
+- 使用Moya定义API端点
+- 所有网络请求使用Combine Publisher
+- 统一错误处理和映射
+- 敏感数据自动加密传输
+- 根据环境自动切换BaseURL
+
+## UI设计规范
+
+### 颜色系统
+```swift
+// 主色系
+NutriGreen-500: #4CAF50  // 主要CTA、选中状态
+NutriGreen-400: #66BB6A  // 次要强调
+NutriGreen-300: #81C784  // 背景渐变
+NutriGreen-100: #E8F5E9  // 浅背景
+
+// 辅助色
+NutriGold-400: #FFCA28   // 谷物、能量相关
+NutriOrange-400: #FFA726 // 水果、活力相关
+
+// 中性色
+NutriWhite: #FFFFFF      // 主要背景
+NutriGray-700: #616161   // 次要文字
+NutriBlack: #212121      // 主要文字
+```
+
+### 字体系统
+- 使用SF Pro字体家族
+- 大标题: SF Pro Display, Bold, 34pt
+- 标题: SF Pro Display, Semibold, 28pt/22pt
+- 正文: SF Pro Text, Regular, 17pt
+- 按钮: SF Pro Text, Semibold, 17pt
+
+### 布局规范
+- 使用8点网格系统
+- 内容区域左右边距16-20pt
+- 卡片间距8-12pt
+- 圆角半径8-16px
+
+## 功能模块
+
+### 主要功能模块
+1. **Onboarding (引导)**: 用户画像建立、问卷调查
+2. **Home (首页)**: 个性化推荐、营养概览、滑动卡片
+3. **Plan (计划)**: 膳食计划查看、日历视图
+4. **Log (记录)**: 饮食记录、食物搜索
+5. **Analysis (分析)**: 营养数据统计、图表展示
+6. **Profile (我的)**: 用户设置、偏好管理
+
+### 核心交互
+- 首页滑动卡片推荐 (类似Tinder)
+- 膳食计划日历视图
+- 饮食记录搜索和份量选择
+- 营养数据图表展示
+
+## 环境配置
+
+### 支持的环境
+- **development (dev)**: 开发环境
+- **qa**: 测试环境  
+- **production (prod)**: 生产环境
+
+### 环境切换
+- Debug模式支持运行时环境切换
+- 每个环境有独立的API地址、加密密钥、超时配置
+- 环境配置通过Info.plist中的APP_ENVIRONMENT控制
+
+## 错误处理
+- 使用统一的NetworkError枚举
+- 提供友好的错误提示信息
+- 网络错误时显示重试选项
+- 空状态和异常状态设计
+- 错误日志记录和监控
+
+## 测试规范
+- ViewModel必须有对应的单元测试
+- 使用Mock对象进行依赖隔离
+- 测试覆盖主要业务逻辑
+- 使用Given-When-Then模式
+- 协议测试优于具体实现测试
+
+## 最佳实践
+
+### 1. 面向协议编程
+- 协议优于具体类型
+- 使用协议扩展提供默认实现
+- 协议组合优于继承
+- 泛型约束使用协议
+
+### 2. 内存管理
+- 使用 `[weak self]` 避免循环引用
+- 及时取消Combine订阅
+- 合理使用 `@StateObject` 和 `@ObservedObject`
+
+### 3. 性能优化
+- 避免在主线程进行耗时操作
+- 使用LazyVStack/LazyHStack处理长列表
+- 图片异步加载和缓存
+- 协议缓存机制
+
+### 4. 数据安全
+- 敏感数据使用Keychain存储
+- 传输层自动加密
+- 本地数据分级保护
+- 生物识别认证
+
+### 5. 代码质量
+- 遵循SOLID原则
+- 面向协议编程(POP)
+- 依赖倒置原则
+- 接口隔离原则
+
+## 禁止事项
+- ❌ 不要在View中直接进行网络请求
+- ❌ 不要在ViewModel中引用UIKit
+- ❌ 不要硬编码API地址和敏感信息
+- ❌ 不要忽略错误处理
+- ❌ 不要在不同架构层之间跳跃依赖
+- ❌ 不要绕过依赖注入容器直接创建对象
+- ❌ 不要将敏感数据以明文形式存储
+- ❌ 不要忽视协议优先原则
+
+## 文件模板
+
+### SwiftUI View模板
+```swift
+import SwiftUI
+
+struct {{ViewName}}: View {
+    @StateObject private var viewModel: {{ViewName}}ViewModel
+    
+    init() {
+        _viewModel = StateObject(wrappedValue: DIContainer.shared.resolve({{ViewName}}ViewModel.self))
+    }
+    
+    var body: some View {
+        content
+            .navigationTitle("{{Title}}")
+            .onAppear {
+                Task {
+                    await viewModel.loadData()
+                }
+            }
+    }
+    
+    private var content: some View {
+        // TODO: 实现视图内容
+        Text("{{ViewName}}")
+    }
+}
+
+#Preview {
+    {{ViewName}}()
+}
+```
+
+### ViewModel模板
+```swift
+import Foundation
+import Combine
+
+@MainActor
+class {{ViewName}}ViewModel: ViewModelProtocol {
+    typealias DataType = {{DataType}}
+    
+    // MARK: - Published Properties
+    @Published var isLoading = false
+    @Published var isRefreshing = false
+    @Published var errorMessage = ""
+    
+    // MARK: - Dependencies
+    private let useCase: {{UseCase}}Protocol
+    private var cancellables = Set<AnyCancellable>()
+    
+    init(useCase: {{UseCase}}Protocol) {
+        self.useCase = useCase
+    }
+    
+    // MARK: - DataLoadable
+    func loadData() async throws -> {{DataType}} {
+        // TODO: 实现数据加载
+    }
+    
+    // MARK: - Refreshable
+    func refresh() async {
+        isRefreshing = true
+        defer { isRefreshing = false }
+        do {
+            _ = try await loadData()
+        } catch {
+            handleError(error)
+        }
+    }
+    
+    // MARK: - Private Methods
+    private func handleError(_ error: Error) {
+        errorMessage = ErrorHandler.handle(error)
+    }
+}
+```
+
+### 协议模板
+```swift
+import Foundation
+
+protocol {{ProtocolName}}Protocol {
+    associatedtype {{AssociatedType}}
+    
+    func {{methodName}}() async throws -> {{AssociatedType}}
+}
+
+// MARK: - Default Implementation
+extension {{ProtocolName}}Protocol {
+    // 提供默认实现
+}
+```
+
+## 开发流程
+1. 定义业务协议 (Domain/Protocols)
+2. 创建Domain实体
+3. 实现用例 (遵循协议)
+4. 定义Repository协议
+5. 实现Data层Repository
+6. 配置依赖注入
+7. 创建ViewModel (遵循ViewModelProtocol)
+8. 实现SwiftUI View
+9. 编写单元测试
+10. 集成到Coordinator
+
+记住：始终遵循 Clean Architecture + POP 原则，协议优先，保持代码简洁、可测试和可维护。数据安全是第一要务。 
