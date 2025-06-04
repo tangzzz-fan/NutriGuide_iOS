@@ -34,6 +34,8 @@ extension Font {
     static let nutriCaption2 = Font.system(size: 11, weight: .regular, design: .default)
 
     // MARK: - Button Fonts
+    /// 按钮字体 - SF Pro Text, Semibold, 17pt (默认按钮字体)
+    static let nutriButton = Font.system(size: 17, weight: .semibold, design: .default)
     /// 大按钮字体 - SF Pro Text, Semibold, 17pt
     static let nutriButtonLarge = Font.system(size: 17, weight: .semibold, design: .default)
     /// 中按钮字体 - SF Pro Text, Medium, 15pt

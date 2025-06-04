@@ -6,15 +6,21 @@
 //
 
 import SwiftUI
-import os.log
 
 @main
 struct NutriGuideApp: App {
-    // 配置管理器
-    private let configManager = ConfigurationManager.shared
-    private let logger = Logger(subsystem: "com.nutriguide.app", category: "Application")
+    // 依赖注入容器
+    private let diContainer = DIContainer.shared
+
+    // 通过依赖注入获取配置管理器和日志记录器
+    private let configManager: ConfigurationManagerProtocol
+    private let logger: LoggerProtocol
 
     init() {
+        // 初始化依赖注入容器
+        self.configManager = diContainer.resolve(ConfigurationManagerProtocol.self)
+        self.logger = diContainer.resolve(LoggerProtocol.self)
+
         setupApplication()
     }
 
@@ -95,30 +101,27 @@ struct NutriGuideApp: App {
 
     @MainActor
     private func checkFirstLaunch() async {
-        let isFirstLaunch = !UserDefaults.standard.bool(
-            forKey: AppConstants.UserDefaults.firstLaunch)
+        let userDefaultsManager: UserDefaultsStorageProtocol = diContainer.resolve(
+            UserDefaultsStorageProtocol.self)
+
+        let isFirstLaunch = userDefaultsManager.getBool(for: .firstLaunch)
 
         if isFirstLaunch {
             logger.info("First launch detected")
-            UserDefaults.standard.set(true, forKey: AppConstants.UserDefaults.firstLaunch)
-            UserDefaults.standard.set(
-                AppConstants.App.version, forKey: AppConstants.UserDefaults.lastAppVersion)
+            userDefaultsManager.setValue(false, for: .firstLaunch)
+            userDefaultsManager.setValue(AppConstants.App.version, for: .lastAppVersion)
         } else {
-            let lastVersion =
-                UserDefaults.standard.string(forKey: AppConstants.UserDefaults.lastAppVersion)
-                ?? "unknown"
+            let lastVersion = userDefaultsManager.getString(for: .lastAppVersion) ?? "unknown"
             if lastVersion != AppConstants.App.version {
                 logger.info(
                     "App updated from version \(lastVersion) to \(AppConstants.App.version)")
-                UserDefaults.standard.set(
-                    AppConstants.App.version, forKey: AppConstants.UserDefaults.lastAppVersion)
+                userDefaultsManager.setValue(AppConstants.App.version, for: .lastAppVersion)
             }
         }
 
         // 增加使用次数
-        let usageCount = UserDefaults.standard.integer(
-            forKey: AppConstants.UserDefaults.appUsageCount)
-        UserDefaults.standard.set(usageCount + 1, forKey: AppConstants.UserDefaults.appUsageCount)
+        let currentCount = userDefaultsManager.getInt(for: .appUsageCount)
+        userDefaultsManager.setValue(currentCount + 1, for: .appUsageCount)
     }
 
     private func performConfigurationCheck() async {

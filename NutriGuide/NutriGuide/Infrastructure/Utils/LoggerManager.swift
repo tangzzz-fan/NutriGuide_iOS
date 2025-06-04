@@ -1,5 +1,4 @@
 import Foundation
-import os.log
 
 // MARK: - Logger Protocol
 /// 日志记录协议
@@ -9,6 +8,46 @@ protocol LoggerProtocol {
     func info(_ message: String, file: String, function: String, line: Int)
     func warning(_ message: String, file: String, function: String, line: Int)
     func error(_ message: String, file: String, function: String, line: Int)
+}
+
+// MARK: - LoggerProtocol 默认参数扩展
+extension LoggerProtocol {
+    func verbose(
+        _ message: String, file: String = #file, function: String = #function, line: Int = #line
+    ) {
+        verbose(message, file: file, function: function, line: line)
+    }
+
+    func debug(
+        _ message: String, file: String = #file, function: String = #function, line: Int = #line
+    ) {
+        debug(message, file: file, function: function, line: line)
+    }
+
+    func info(
+        _ message: String, file: String = #file, function: String = #function, line: Int = #line
+    ) {
+        info(message, file: file, function: function, line: line)
+    }
+
+    func warning(
+        _ message: String, file: String = #file, function: String = #function, line: Int = #line
+    ) {
+        warning(message, file: file, function: function, line: line)
+    }
+
+    func error(
+        _ message: String, file: String = #file, function: String = #function, line: Int = #line
+    ) {
+        error(message, file: file, function: function, line: line)
+    }
+}
+
+// MARK: - Logger Manager Protocol
+/// 日志管理器协议
+protocol LoggerManagerProtocol {
+    func logger(for category: String) -> LoggerProtocol
+    var `default`: LoggerProtocol { get }
 }
 
 // MARK: - Log Level
@@ -41,56 +80,71 @@ enum LogLevel: Int, CaseIterable {
     }
 }
 
-// MARK: - OS Logger Implementation
-/// 基于os.log的日志实现
-class OSLogger: LoggerProtocol {
-    private let logger: Logger
+// MARK: - Simple Logger Implementation
+/// 简单的日志实现
+class SimpleLogger: LoggerProtocol {
+    private let category: String
+    private let enableLogging: Bool
 
-    init(subsystem: String, category: String) {
-        self.logger = Logger(subsystem: subsystem, category: category)
+    init(category: String, enableLogging: Bool = true) {
+        self.category = category
+        self.enableLogging = enableLogging
     }
 
     func verbose(
         _ message: String, file: String = #file, function: String = #function, line: Int = #line
     ) {
-        logger.debug("⚪️ VERBOSE: \(message) - \(function):\(line)")
+        log(.verbose, message, file: file, function: function, line: line)
     }
 
     func debug(
         _ message: String, file: String = #file, function: String = #function, line: Int = #line
     ) {
-        logger.debug("🔵 DEBUG: \(message) - \(function):\(line)")
+        log(.debug, message, file: file, function: function, line: line)
     }
 
     func info(
         _ message: String, file: String = #file, function: String = #function, line: Int = #line
     ) {
-        logger.info("🟢 INFO: \(message) - \(function):\(line)")
+        log(.info, message, file: file, function: function, line: line)
     }
 
     func warning(
         _ message: String, file: String = #file, function: String = #function, line: Int = #line
     ) {
-        logger.warning("🟡 WARNING: \(message) - \(function):\(line)")
+        log(.warning, message, file: file, function: function, line: line)
     }
 
     func error(
         _ message: String, file: String = #file, function: String = #function, line: Int = #line
     ) {
-        logger.error("🔴 ERROR: \(message) - \(function):\(line)")
+        log(.error, message, file: file, function: function, line: line)
+    }
+
+    private func log(
+        _ level: LogLevel, _ message: String, file: String, function: String, line: Int
+    ) {
+        guard enableLogging else { return }
+
+        let filename = (file as NSString).lastPathComponent
+        let timestamp = DateFormatter.logFormatter.string(from: Date())
+
+        print(
+            "\(timestamp) \(level.emoji) [\(category)] \(filename).\(function):\(line) - \(message)"
+        )
     }
 }
 
-// MARK: - Logger Manager
-/// 日志管理器
-class LoggerManager {
-    static let shared = LoggerManager()
-
+// MARK: - Logger Manager Implementation
+/// 日志管理器实现
+class LoggerManager: LoggerManagerProtocol {
     private var loggers: [String: LoggerProtocol] = [:]
     private let defaultLogger: LoggerProtocol
+    private let enableLogging: Bool
 
-    private init() {
-        self.defaultLogger = OSLogger(subsystem: "com.nutriguide.app", category: "Default")
+    init(enableLogging: Bool = true) {
+        self.enableLogging = enableLogging
+        self.defaultLogger = SimpleLogger(category: "Default", enableLogging: enableLogging)
     }
 
     /// 获取指定类别的日志记录器
@@ -99,7 +153,7 @@ class LoggerManager {
             return existingLogger
         }
 
-        let newLogger = OSLogger(subsystem: "com.nutriguide.app", category: category)
+        let newLogger = SimpleLogger(category: category, enableLogging: enableLogging)
         loggers[category] = newLogger
         return newLogger
     }
@@ -116,20 +170,10 @@ func log(
     _ level: LogLevel, _ message: String, category: String = "General", file: String = #file,
     function: String = #function, line: Int = #line
 ) {
-    let logger = LoggerManager.shared.logger(for: category)
-
-    switch level {
-    case .verbose:
-        logger.verbose(message, file: file, function: function, line: line)
-    case .debug:
-        logger.debug(message, file: file, function: function, line: line)
-    case .info:
-        logger.info(message, file: file, function: function, line: line)
-    case .warning:
-        logger.warning(message, file: file, function: function, line: line)
-    case .error:
-        logger.error(message, file: file, function: function, line: line)
-    }
+    // 简单的控制台输出
+    let filename = (file as NSString).lastPathComponent
+    let timestamp = DateFormatter.logFormatter.string(from: Date())
+    print("\(timestamp) \(level.emoji) [\(category)] \(filename).\(function):\(line) - \(message)")
 }
 
 // MARK: - Convenience Log Functions
@@ -168,26 +212,11 @@ func logError(
     log(.error, message, category: category, file: file, function: function, line: line)
 }
 
-// MARK: - SwiftyBeaver Integration (Future)
-/*
- TODO: 当SwiftyBeaver依赖添加后，可以创建SwiftyBeaverLogger类：
-
- import SwiftyBeaver
-
- class SwiftyBeaverLogger: LoggerProtocol {
-     private let logger = SwiftyBeaver.self
-
-     init() {
-         setupDestinations()
-     }
-
-     private func setupDestinations() {
-         let console = ConsoleDestination()
-         console.format = "$DHH:mm:ss$d $L $N.$F:$l - $M"
-         // ... 其他配置
-         logger.addDestination(console)
-     }
-
-     // 实现LoggerProtocol方法...
- }
- */
+// MARK: - DateFormatter Extension
+extension DateFormatter {
+    fileprivate static let logFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss.SSS"
+        return formatter
+    }()
+}

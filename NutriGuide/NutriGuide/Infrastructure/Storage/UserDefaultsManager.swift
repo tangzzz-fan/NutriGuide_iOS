@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import os.log
 
 // MARK: - UserDefaults Storage Protocol
 /// UserDefaults存储协议
@@ -10,6 +9,19 @@ protocol UserDefaultsStorageProtocol {
     func remove(for key: UserDefaultsKey)
     func exists(for key: UserDefaultsKey) -> Bool
     func removeAll()
+
+    // 基础类型便捷方法
+    func setValue(_ value: Any?, for key: UserDefaultsKey)
+    func getString(for key: UserDefaultsKey) -> String?
+    func getBool(for key: UserDefaultsKey) -> Bool
+    func getInt(for key: UserDefaultsKey) -> Int
+    func getDate(for key: UserDefaultsKey) -> Date?
+    func setDate(_ date: Date?, for key: UserDefaultsKey)
+
+    // Combine 支持
+    func publisher<T: Codable>(for key: UserDefaultsKey, type: T.Type) -> AnyPublisher<T?, Never>
+    func boolPublisher(for key: UserDefaultsKey) -> AnyPublisher<Bool, Never>
+    func stringPublisher(for key: UserDefaultsKey) -> AnyPublisher<String?, Never>
 }
 
 // MARK: - UserDefaults Key Protocol
@@ -45,6 +57,22 @@ enum UserDefaultsKey: String, UserDefaultsKeyProtocol, CaseIterable {
     case preferredTheme = "preferred_theme"
     case preferredLanguage = "preferred_language"
 
+    // MARK: - Health & Nutrition
+    case heightInCm = "height_in_cm"
+    case weightInKg = "weight_in_kg"
+    case birthDate = "birth_date"
+    case gender = "gender"
+    case activityLevel = "activity_level"
+    case dietaryRestrictions = "dietary_restrictions"
+    case allergies = "allergies"
+
+    // MARK: - App Features
+    case nutriScoreEnabled = "nutri_score_enabled"
+    case mealReminderEnabled = "meal_reminder_enabled"
+    case waterReminderEnabled = "water_reminder_enabled"
+    case favoriteRecipes = "favorite_recipes"
+    case mealHistory = "meal_history"
+
     var keyName: String {
         return self.rawValue
     }
@@ -57,43 +85,132 @@ enum UserDefaultsKey: String, UserDefaultsKeyProtocol, CaseIterable {
             return 0
         case .lastAppVersion:
             return ""
-        case .dailyNotificationEnabled:
+        case .dailyNotificationEnabled, .nutriScoreEnabled:
             return true
-        case .dataCollectionConsent:
+        case .dataCollectionConsent, .biometricEnabled, .onboardingCompleted:
             return false
-        case .biometricEnabled:
-            return false
-        case .onboardingCompleted:
-            return false
-        case .userProfile:
+        case .mealReminderEnabled, .waterReminderEnabled:
+            return true
+        case .userProfile, .userPreferences, .lastSyncDate, .environmentOverride:
             return nil
-        case .userPreferences:
-            return nil
-        case .lastSyncDate:
-            return nil
-        case .environmentOverride:
+        case .birthDate:
             return nil
         case .preferredTheme:
             return "system"
         case .preferredLanguage:
             return "zh-Hans"
+        case .heightInCm, .weightInKg:
+            return 0.0
+        case .gender:
+            return ""
+        case .activityLevel:
+            return "moderate"
+        case .dietaryRestrictions, .allergies, .favoriteRecipes, .mealHistory:
+            return []
         }
+    }
+}
+
+// MARK: - Property Wrapper for UserDefaults
+@propertyWrapper
+struct UserDefaultsValue<Value: Codable> {
+    private let key: UserDefaultsKey
+    private let defaultValue: Value
+    private let userDefaults: UserDefaults
+    private let shouldEncode: Bool
+
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(_ key: UserDefaultsKey, defaultValue: Value, userDefaults: UserDefaults = .standard) {
+        self.key = key
+        self.defaultValue = defaultValue
+        self.userDefaults = userDefaults
+        self.shouldEncode = !(Value.self is any UserDefaultsCompatible.Type)
+    }
+
+    var wrappedValue: Value {
+        get {
+            guard let value = userDefaults.value(forKey: key.keyName) else {
+                return defaultValue
+            }
+
+            if shouldEncode {
+                guard let data = value as? Data,
+                    let decodedValue = try? decoder.decode(Value.self, from: data)
+                else {
+                    return defaultValue
+                }
+                return decodedValue
+            } else {
+                return value as? Value ?? defaultValue
+            }
+        }
+        set {
+            if shouldEncode {
+                let data = try? encoder.encode(newValue)
+                userDefaults.setValue(data, forKey: key.keyName)
+            } else {
+                userDefaults.setValue(newValue, forKey: key.keyName)
+            }
+            userDefaults.synchronize()
+        }
+    }
+}
+
+// MARK: - UserDefaults Compatible Types
+/// 标记 UserDefaults 兼容的基础类型
+protocol UserDefaultsCompatible {}
+extension String: UserDefaultsCompatible {}
+extension Int: UserDefaultsCompatible {}
+extension Bool: UserDefaultsCompatible {}
+extension Float: UserDefaultsCompatible {}
+extension Double: UserDefaultsCompatible {}
+extension Date: UserDefaultsCompatible {}
+extension Data: UserDefaultsCompatible {}
+extension Array: UserDefaultsCompatible where Element: UserDefaultsCompatible {}
+extension Dictionary: UserDefaultsCompatible
+where Key: UserDefaultsCompatible, Value: UserDefaultsCompatible {}
+
+// MARK: - Simple Logger for UserDefaults (避免循环依赖)
+private struct UserDefaultsLogger {
+    private let category: String
+
+    init(category: String) {
+        self.category = category
+    }
+
+    func info(_ message: String) {
+        print("🟢 [\(category)] \(message)")
+    }
+
+    func debug(_ message: String) {
+        print("🔵 [\(category)] \(message)")
+    }
+
+    func warning(_ message: String) {
+        print("🟡 [\(category)] \(message)")
+    }
+
+    func error(_ message: String) {
+        print("🔴 [\(category)] \(message)")
     }
 }
 
 // MARK: - UserDefaults Manager Implementation
 /// UserDefaults管理器实现
 class UserDefaultsManager: UserDefaultsStorageProtocol, ObservableObject {
-    static let shared = UserDefaultsManager()
-
     private let userDefaults: UserDefaults
-    private let logger = Logger(subsystem: "com.nutriguide.app", category: "UserDefaultsManager")
+    private let logger: UserDefaultsLogger
 
     // 发布值变化的Publishers
     @Published private var valueDidChange = false
+    private var cancellables = Set<AnyCancellable>()
 
-    private init(userDefaults: UserDefaults = .standard) {
+    init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
+        self.logger = UserDefaultsLogger(category: "UserDefaultsManager")
+
         logger.info("UserDefaultsManager initialized")
     }
 
@@ -304,4 +421,57 @@ extension UserDefaultsManager {
             set { setValue(newValue, for: .environmentOverride) }
         }
     #endif
+
+    // MARK: - Health & Nutrition Properties
+    var heightInCm: Double {
+        get { userDefaults.double(forKey: UserDefaultsKey.heightInCm.keyName) }
+        set {
+            userDefaults.set(newValue, forKey: UserDefaultsKey.heightInCm.keyName)
+            notifyValueChanged()
+        }
+    }
+
+    var weightInKg: Double {
+        get { userDefaults.double(forKey: UserDefaultsKey.weightInKg.keyName) }
+        set {
+            userDefaults.set(newValue, forKey: UserDefaultsKey.weightInKg.keyName)
+            notifyValueChanged()
+        }
+    }
+
+    var birthDate: Date? {
+        get { getDate(for: .birthDate) }
+        set { setDate(newValue, for: .birthDate) }
+    }
+
+    var gender: String {
+        get { getString(for: .gender) ?? "" }
+        set { setValue(newValue, for: .gender) }
+    }
+
+    var activityLevel: String {
+        get { getString(for: .activityLevel) ?? "moderate" }
+        set { setValue(newValue, for: .activityLevel) }
+    }
+
+    // MARK: - Feature Toggles
+    var isNutriScoreEnabled: Bool {
+        get { getBool(for: .nutriScoreEnabled) }
+        set { setValue(newValue, for: .nutriScoreEnabled) }
+    }
+
+    var isMealReminderEnabled: Bool {
+        get { getBool(for: .mealReminderEnabled) }
+        set { setValue(newValue, for: .mealReminderEnabled) }
+    }
+
+    var isWaterReminderEnabled: Bool {
+        get { getBool(for: .waterReminderEnabled) }
+        set { setValue(newValue, for: .waterReminderEnabled) }
+    }
+}
+
+// MARK: - Notification Extension
+extension Notification.Name {
+    static let userDefaultsDidChange = Notification.Name("UserDefaultsDidChange")
 }

@@ -8,7 +8,11 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var configManager = ConfigurationManager.shared
+    private let configManager: ConfigurationManagerProtocol
+
+    init() {
+        self.configManager = DIContainer.resolve(ConfigurationManagerProtocol.self)
+    }
 
     var body: some View {
         NavigationView {

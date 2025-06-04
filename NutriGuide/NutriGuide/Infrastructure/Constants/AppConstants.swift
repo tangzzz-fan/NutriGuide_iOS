@@ -78,9 +78,10 @@ struct AppConstants {
         static let enableDataExport = true
     }
 
-    // MARK: - Runtime Constants
+    // MARK: - Runtime Constants (使用依赖注入)
     static var currentEnvironment: Environment {
-        return ConfigurationManager.shared.currentEnvironment
+        let configManager = DIContainer.resolveOptional(ConfigurationManagerProtocol.self)
+        return configManager?.currentEnvironment ?? .development
     }
 
     static var isDebugMode: Bool {

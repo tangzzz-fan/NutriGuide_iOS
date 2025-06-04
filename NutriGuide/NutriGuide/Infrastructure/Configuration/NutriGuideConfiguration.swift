@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import os.log
 
 // MARK: - Environment Configuration
 /// 应用环境枚举
@@ -87,12 +86,9 @@ protocol ConfigurationManagerProtocol: AnyObject {
 // MARK: - Configuration Manager Implementation
 /// 配置管理器实现
 class ConfigurationManager: ConfigurationManagerProtocol, ObservableObject {
-    static let shared = ConfigurationManager()
-
     @Published private(set) var currentEnvironment: Environment
-    private let logger = Logger(subsystem: "com.nutriguide.app", category: "Configuration")
 
-    private init() {
+    init() {
         // 从Info.plist读取环境配置
         guard
             let envString = Bundle.main.object(forInfoDictionaryKey: "APP_ENVIRONMENT") as? String,
@@ -107,7 +103,7 @@ class ConfigurationManager: ConfigurationManagerProtocol, ObservableObject {
         }
         self.currentEnvironment = env
 
-        logger.info("App started with environment: \(env.displayName)")
+        print("🟢 App started with environment: \(env.displayName)")
     }
 
     var baseURL: String {
@@ -145,14 +141,19 @@ class ConfigurationManager: ConfigurationManagerProtocol, ObservableObject {
         #if DEBUG
             objectWillChange.send()
             currentEnvironment = environment
-            logger.info("Environment switched to: \(environment.displayName)")
+            print("🟢 Environment switched to: \(environment.displayName)")
 
             NotificationCenter.default.post(
                 name: .environmentDidChange,
                 object: environment
             )
         #else
-            logger.warning("Environment switching is disabled in production")
+            print("🟡 Environment switching is disabled in production")
         #endif
     }
+}
+
+// MARK: - Notification Extensions
+extension Notification.Name {
+    static let environmentDidChange = Notification.Name("EnvironmentDidChange")
 }
