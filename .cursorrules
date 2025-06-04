@@ -2,6 +2,7 @@
 
 ## 项目概述
 NutriGuide是一款基于AI的个性化健康膳食管理iOS应用，使用SwiftUI + Combine + Moya + MVVMC架构，遵循Clean Architecture、SOLID原则和面向协议编程(POP)。
+不需要考虑 cursor 中的警告, 只考虑执行 xcodebuild 出现的错误信息, 防止重复或者错误修复.
 
 ## 技术栈
 - **UI框架**: SwiftUI (iOS 14.0+)
