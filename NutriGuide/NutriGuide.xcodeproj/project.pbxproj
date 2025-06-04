@@ -35,6 +35,7 @@
 		18CFD08C2DF0011500512278 /* NutriGuide.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NutriGuide.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		18CFD0992DF0011700512278 /* NutriGuideTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NutriGuideTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		18CFD0A32DF0011700512278 /* NutriGuideUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NutriGuideUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		18CFD1022DF0154600512278 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -88,6 +89,7 @@
 		18CFD0832DF0011500512278 = {
 			isa = PBXGroup;
 			children = (
+				18CFD1022DF0154600512278 /* README.md */,
 				18CFD08E2DF0011500512278 /* NutriGuide */,
 				18CFD09C2DF0011700512278 /* NutriGuideTests */,
 				18CFD0A62DF0011700512278 /* NutriGuideUITests */,
@@ -434,7 +436,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.azir.NutriGuide;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nutriguide.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -462,7 +464,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.azir.NutriGuide;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nutriguide.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;

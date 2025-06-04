@@ -7,18 +7,6 @@ extension Color {
         return Color(red: red / 255, green: green / 255, blue: blue / 255, opacity: alpha)
     }
 
-    /// 获取颜色的十六进制表示
-    var hexString: String {
-        // 简化的十六进制表示方法
-        if self == .nutriGreen500 { return "#4CAF50" }
-        if self == .nutriGreen400 { return "#66BB6A" }
-        if self == .nutriGreen300 { return "#81C784" }
-        if self == .nutriGreen100 { return "#E8F5E9" }
-        if self == .nutriGold400 { return "#FFCA28" }
-        if self == .nutriOrange400 { return "#FFA726" }
-        return "#UNKNOWN"
-    }
-
     /// 备选RGB颜色定义（当资源文件不可用时使用）
     static var nutriGreen500Fallback: Color {
         Color(red: 76 / 255, green: 175 / 255, blue: 80 / 255)

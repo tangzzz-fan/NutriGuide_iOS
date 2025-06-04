@@ -21,7 +21,7 @@ enum Environment: String, CaseIterable {
     /// API基础URL
     var baseURL: String {
         switch self {
-        case .development: return "https://api-dev.nutriguide.com/v1"
+        case .development: return "http://localhost:3000/v1"
         case .qa: return "https://api-qa.nutriguide.com/v1"
         case .production: return "https://api.nutriguide.com/v1"
         }
